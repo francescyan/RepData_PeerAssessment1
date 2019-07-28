@@ -1,0 +1,173 @@
+---
+title: "JH Reproducible Research PA Steps Project"
+author: "Frances C Yan"
+date: "7/28/2019"
+output:
+  html_document: default
+  pdf_document: default
+---  
+  
+**Loading and preprocessing the data**
+
+1 - Load the data  
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+# index.rmd must knit in project copied from git respository & data file referenced in same repo
+steps <- read.csv("./activity.csv", header=TRUE)
+```
+  
+**What is mean total number of steps taken per day?**
+
+1 - Make a histogram of the total number of steps taken each day  
+
+```{r message=FALSE}
+# since functions from both plyr and dplyr will be used, loading plyr before dplyr 
+# plyr package has function ddply to input dataframe, exec functions and output df (very useful)
+library(plyr)
+library(dplyr)
+# > pipe carries the group_by factor into summarize
+stepsByDate <- data.frame(steps %>% group_by(date) %>% summarize(sumSteps <- sum(steps)))
+colnames(stepsByDate) <- c("Date", "NumberOfSteps")
+# create histogram
+hist(stepsByDate$NumberOfSteps, breaks=20,
+     xlab = "Step Count In a Day (about 1000 steps increment)",
+     ylab = "Number of days in which steps where taken",
+     main = "Step Count Day Frequency",
+     col = 'blue'
+)
+```
+
+2 - Calculate and report the mean and median total number of steps taken per day  
+
+```{r message=FALSE}
+# get mean and median of step count by date
+stepsMeanDF <- data.frame(steps %>% group_by(date) 
+  %>% summarize(stepsMean <- mean(steps,na.rm=TRUE), stepsMedian <- median(steps,na.rm=TRUE)))
+colnames(stepsMeanDF) <- c("Date", "Mean", "Median")
+#View(stepsMeanDF)
+```
+
+```{r results = 'asis'}
+knitr::kable(stepsMeanDF, caption = "Step Mean and Median by Date") 
+```
+
+**What is the average daily activity pattern**
+
+1 - Make a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)  
+
+```{r echo=TRUE}
+#get average number of steps across all days
+stepsMeanAcrossDaysDF <- data.frame(steps %>% group_by(interval) 
+   %>% summarize(stepsMeanAcrossDays <- mean(steps, na.rm=TRUE)))
+colnames(stepsMeanAcrossDaysDF) <- c("interval","stepsMeanAcrossDays")
+#plot line graph
+#  e.g., 200 average steps taken during time interval about 900
+plot(stepsMeanAcrossDaysDF$interval,
+     stepsMeanAcrossDaysDF$stepsMeanAcrossDays,
+     ylab="Step Count Mean Across Days",
+     xlab="5-Min Intervals",
+     type="l",
+     main="Step Count Mean Across Days by Intervals")
+```
+
+2 - Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r echo=TRUE}
+stepsMeanAcrossDaysDF[stepsMeanAcrossDaysDF$stepsMeanAcrossDays==max(stepsMeanAcrossDaysDF$stepsMeanAcrossDays),]
+```
+
+**Imputing missing values**
+
+1 - Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+```{r echo=TRUE}
+summary(steps)
+```
+
+
+==>  2304 is total number of NAs
+
+
+2 - Devise a strategy for filling in all of the missing values in the dataset.
+
+
+==>  Mean of steps for the 5-minute intervals across days is used to impute missing values  
+
+
+3 - Create a new dataset that is equal to the original dataset but with the missing data filled in.  
+
+```{r echo=TRUE}
+# create impute function
+impute <- function(x) replace(x,is.na(x),mean(x,na.rm=TRUE))
+# impute missing values 
+stepsImputed<-ddply(steps,~interval,transform,steps=impute(steps))
+```
+
+4a - Make a histogram of the total number of steps taken each day  
+
+```{r echo=TRUE}
+# > pipe carries the group_by factor into summarize
+imputedStepsByDate <- data.frame(stepsImputed %>% group_by(date) %>% summarize(sumImputedSteps <- sum(steps)))
+colnames(imputedStepsByDate) <- c("Date", "NumberOfSteps")
+# create histogram
+hist(imputedStepsByDate$NumberOfSteps, breaks=20,
+     xlab = "Step Count In a Day (about 1000 steps increment)",
+     ylab = "Number of days in which steps where taken",
+     main = "Imputed Step Count Day Frequency",
+     col = 'red'
+)
+```
+
+4b - Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+
+==>  Yes estimates with imputed values show more than 18 days in which 10 to 11k steps were taken, compared to non-imputed estimates of 10 days. 
+
+==>  Missing values could impact conclusion of the analysis
+
+
+```{r echo=TRUE}
+# get mean and median of step count by date
+imputedStepsMeanDF <- data.frame(stepsImputed %>% group_by(date) 
+  %>% summarize(imputedStepsMean <- mean(steps,na.rm=TRUE), imputedStepsMedian <- median(steps,na.rm=TRUE)))
+colnames(imputedStepsMeanDF) <- c("Date", "Mean", "Median")
+```
+
+```{r results = 'asis'}
+knitr::kable(imputedStepsMeanDF, caption = "Imputed Step Mean and Median by Date") 
+```  
+  
+**Are there differences inactivity patterns between weekdays and weekends?**  
+
+
+==>  There are differences between weekdays and weekends - steps appear to be taken at various time throughout the day on weekends as compared to weekdays.
+
+
+1 - Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r echo=TRUE}
+# create dayType based weekdays()
+stepsImputed$dayType <- ifelse(weekdays(as.Date(stepsImputed$date)) == "Saturday" | 
+            weekdays(as.Date(stepsImputed$date)) == "Sunday", "weekend", "weekday")
+# get average number of steps across all days
+stepsImputedMeanAcrossDaysDF <- data.frame(stepsImputed %>% group_by(dayType, interval) 
+      %>% summarize(stepsImputedMeanAcrossDays <- mean(steps, na.rm=TRUE)))
+colnames(stepsImputedMeanAcrossDaysDF) <- c("dayType", "interval","stepsImputedMeanAcrossDays")
+```
+
+2 - Make a panel plot containing a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+```{r echo=TRUE}
+#use lattice system to plot
+library(lattice)
+xyplot(stepsImputedMeanAcrossDays ~ interval | dayType, 
+       data = stepsImputedMeanAcrossDaysDF, layout = c(1,2), type = "l",
+       main = "Step Activity between Weekdays and Weekends",
+       xlab = "5-Minute Interval",
+       ylab = "Number of Steps Across Days"
+)
+```
+
+
+
+
